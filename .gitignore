@@ -11,3 +11,6 @@ wheels/
 
 # log-file folder
 logs/
+
+# ignore script files
+scripts/
