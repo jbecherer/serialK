@@ -14,3 +14,6 @@ logs/
 
 # ignore script files
 scripts/
+
+# ignore link to local config file
+config.toml
