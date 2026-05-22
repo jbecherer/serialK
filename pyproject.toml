@@ -1,0 +1,25 @@
+[project]
+name = "serialk"
+version = "0.1.0"
+description = "Interactive serial-port console and logger for scientific instruments"
+authors = [
+    { name = "Johannes Becherer", email = "jbecherer@gmx.net" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "platformdirs>=4.9.6",
+    "prompt-toolkit>=3.0.52",
+    "pyserial>=3.5",
+]
+
+[project.scripts]
+serialk = "serialk:main"
+
+[build-system]
+requires = ["uv_build>=0.9.20,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
