@@ -151,6 +151,9 @@ Scripts are plain UTF-8 text files with one command per line.
 - blank lines are ignored
 - lines starting with `#` are ignored
 - all remaining lines are sent verbatim through the same session send path used by interactive commands
+- delays are defined per script run, not per line inside the script file
+- use `--script-delay <seconds>` for startup scripts or `/run <script_path> [delay_seconds]` in the interactive console to apply one fixed delay between all sent commands
+- line-specific delays are not supported in v1
 
 Example:
 
