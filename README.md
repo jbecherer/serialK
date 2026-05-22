@@ -1,0 +1,213 @@
+# serialk
+
+`serialk` is a Linux-focused Python CLI for working with scientific instruments over a serial port. It provides one interactive terminal console for live command entry and streaming device output, supports plain-text command scripts, and writes a timestamped TX/RX log for each session to an explicit external log directory.
+
+## Purpose
+
+This tool targets instruments that expose both:
+
+1. an interactive shell-like serial interface
+2. a measurement mode that continuously emits textual status or measurement lines while still accepting commands
+
+The first implementation is text-oriented, profile-driven, and designed for reproducible instrument workflows.
+
+## Features
+
+- installable CLI entry point: `serialk`
+- TOML configuration file with multiple named instrument profiles
+- per-session log files with timestamps and `TX` / `RX` markers
+- interactive terminal console powered by `prompt_toolkit`
+- persistent command history in XDG state storage
+- plain-text script execution with optional global inter-command delay
+- simulator transport for local development without physical hardware
+- command-line overrides for serial settings
+
+## Requirements
+
+- Linux
+- Python 3.12+
+- `uv` for environment and dependency management
+
+Runtime dependencies:
+
+- `pyserial`
+- `prompt_toolkit`
+- `platformdirs`
+
+## Configuration
+
+By default, `serialk` reads its configuration from:
+
+```text
+~/.config/serialk/config.toml
+```
+
+The configuration file must define one or more profiles under `[profiles.<name>]`.
+
+Example:
+
+```toml
+[profiles.instrument_shell]
+port = "/dev/ttyUSB0"
+baudrate = 115200
+bytesize = 8
+parity = "N"
+stopbits = 1.0
+timeout = 0.2
+write_timeout = 1.0
+encoding = "utf-8"
+line_ending = "crlf"
+log_dir = "/data/instrument_logs"
+
+[profiles.instrument_simulator]
+port = "sim://default"
+baudrate = 115200
+bytesize = 8
+parity = "N"
+stopbits = 1.0
+timeout = 0.1
+write_timeout = 1.0
+encoding = "utf-8"
+line_ending = "lf"
+log_dir = "/data/simulator_logs"
+```
+
+### Required profile fields
+
+| Field | Meaning |
+| --- | --- |
+| `port` | Serial device path or URL such as `/dev/ttyUSB0` or `sim://default` |
+| `log_dir` | External directory where per-session logs are written |
+
+### Optional profile fields
+
+| Field | Default |
+| --- | --- |
+| `baudrate` | `9600` |
+| `bytesize` | `8` |
+| `parity` | `"N"` |
+| `stopbits` | `1.0` |
+| `timeout` | `0.2` |
+| `write_timeout` | `1.0` |
+| `encoding` | `"utf-8"` |
+| `line_ending` | `"lf"` |
+
+## Usage
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+Write an example config file:
+
+```bash
+uv run serialk --write-example-config ~/.config/serialk/config.toml
+```
+
+Start an interactive session:
+
+```bash
+uv run serialk --profile instrument_shell
+```
+
+Override the log directory at runtime:
+
+```bash
+uv run serialk --profile instrument_shell --log-dir /mnt/lab/logs
+```
+
+Run a startup script before entering the console:
+
+```bash
+uv run serialk --profile instrument_shell --script scripts/startup.txt --script-delay 0.5
+```
+
+Run against the built-in simulator:
+
+```bash
+uv run serialk --profile instrument_simulator
+```
+
+### Interactive console behavior
+
+Type raw device commands directly at the prompt. These are sent exactly once with the configured line ending appended by `serialk`.
+
+Built-in console commands:
+
+- `/help`
+- `/status`
+- `/run <script_path> [delay_seconds]`
+- `/reconnect`
+- `/quit`
+
+Incoming device lines are shown live in the terminal without timestamps. Timestamps are preserved in the session log file instead.
+
+## Script format
+
+Scripts are plain UTF-8 text files with one command per line.
+
+- blank lines are ignored
+- lines starting with `#` are ignored
+- all remaining lines are sent verbatim through the same session send path used by interactive commands
+
+Example:
+
+```text
+# initialization commands
+ping
+status
+start
+```
+
+## Output data and logging
+
+Each session creates one log file in the resolved log directory:
+
+```text
+<profile_name>_YYYYMMDDTHHMMSS.log
+```
+
+Each log entry contains:
+
+- local timestamp with timezone offset
+- direction marker: `EVENT`, `TX`, or `RX`
+- payload text
+
+Example:
+
+```text
+[2026-05-22T10:23:41.125+02:00] EVENT CONNECTED port=/dev/ttyUSB0
+[2026-05-22T10:23:42.018+02:00] TX    status
+[2026-05-22T10:23:42.032+02:00] RX    STATUS mode=MEASUREMENT measurements=12
+```
+
+## XDG file locations
+
+`serialk` uses XDG locations on Linux for local application state:
+
+| Purpose | Default path |
+| --- | --- |
+| Config file | `~/.config/serialk/config.toml` |
+| Command history | `~/.local/state/serialk/history.txt` |
+
+Session logs are intentionally **not** written to XDG state by default; an explicit external log directory must be configured in the profile or provided with `--log-dir`.
+
+## Development and simulator workflow
+
+Use the simulator profile to exercise both shell-like commands and continuous measurement output without a physical instrument. The simulator emits measurement lines automatically and responds to commands like `ping`, `status`, `shell`, `start`, and `stop`.
+
+## Computational requirements
+
+- memory: low for ordinary line-oriented serial traffic
+- runtime overhead: dominated by terminal I/O and log writes
+- scaling: suitable for continuous text streams; no structured parsing or large in-memory buffering is performed in v1
+
+## Testing
+
+Run the automated tests with:
+
+```bash
+uv run pytest
+```
