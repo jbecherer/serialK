@@ -19,7 +19,7 @@ from serialk.config import (
 )
 from serialk.console import InteractiveConsole
 from serialk.logging import SessionLogger
-from serialk.script_runner import run_script
+from serialk.script_runner import ScriptSyntaxError, run_script
 from serialk.serial_session import SerialSession, SerialSessionError
 
 
@@ -67,6 +67,7 @@ def main() -> None:
         session,
         history_path=history_path,
         default_script_delay=args.script_delay,
+        default_condition_timeout=args.script_condition_timeout,
     )
     session.set_display_callback(console.display_device_line)
 
@@ -77,12 +78,13 @@ def main() -> None:
                 session,
                 args.script,
                 inter_command_delay=args.script_delay,
+                condition_timeout=args.script_condition_timeout,
             )
             console.display_message(
                 f"Sent {len(sent_commands)} startup commands from {args.script}."
             )
         asyncio.run(console.run())
-    except (ConfigurationError, OSError, SerialSessionError) as exc:
+    except (ConfigurationError, OSError, SerialSessionError, ValueError, ScriptSyntaxError) as exc:
         logger.log_event(f"ERROR {exc}")
         _exit_with_error(str(exc))
     finally:
@@ -124,6 +126,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         help="Optional fixed delay in seconds between scripted commands.",
+    )
+    parser.add_argument(
+        "--script-condition-timeout",
+        type=float,
+        default=5.0,
+        help=(
+            "Default timeout in seconds for conditional script blocks that wait "
+            "for incoming instrument text."
+        ),
     )
     parser.add_argument("--port", help="Override the serial port or URL.")
     parser.add_argument(

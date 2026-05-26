@@ -10,7 +10,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
-from serialk.script_runner import run_script
+from serialk.script_runner import ScriptSyntaxError, run_script
 from serialk.serial_session import SerialSession, SerialSessionError
 
 
@@ -23,6 +23,7 @@ class InteractiveConsole:
         *,
         history_path: Path,
         default_script_delay: float = 0.0,
+        default_condition_timeout: float = 5.0,
     ) -> None:
         """Create a new terminal console.
 
@@ -34,11 +35,14 @@ class InteractiveConsole:
             Prompt history file path.
         default_script_delay:
             Default delay in seconds used by the ``/run`` command.
+        default_condition_timeout:
+            Default conditional wait timeout in seconds used by ``/run``.
         """
 
         history_path.parent.mkdir(parents=True, exist_ok=True)
         self._session = session
         self._default_script_delay = default_script_delay
+        self._default_condition_timeout = default_condition_timeout
         self._prompt = PromptSession(
             history=FileHistory(str(history_path)),
         )
@@ -122,7 +126,8 @@ class InteractiveConsole:
         """Display supported slash commands."""
 
         self.display_message(
-            "Slash commands: /help, /status, /run <script> [delay_seconds], /reconnect, /quit"
+            "Slash commands: /help, /status, /run <script> [delay_seconds] "
+            "[condition_timeout_seconds], /reconnect, /quit"
         )
 
     def _show_status(self) -> None:
@@ -147,17 +152,28 @@ class InteractiveConsole:
         """Execute one script from the prompt loop."""
 
         if len(parts) < 2:
-            self.display_message("Usage: /run <script_path> [delay_seconds]")
+            self.display_message(
+                "Usage: /run <script_path> [delay_seconds] [condition_timeout_seconds]"
+            )
             return
 
         script_path = Path(parts[1]).expanduser()
         delay = self._default_script_delay
+        condition_timeout = self._default_condition_timeout
         if len(parts) >= 3:
             try:
                 delay = float(parts[2])
             except ValueError:
                 self.display_message(
                     f"Invalid delay '{parts[2]}'; expected a floating-point value."
+                )
+                return
+        if len(parts) >= 4:
+            try:
+                condition_timeout = float(parts[3])
+            except ValueError:
+                self.display_message(
+                    f"Invalid conditional timeout '{parts[3]}'; expected a floating-point value."
                 )
                 return
 
@@ -167,11 +183,13 @@ class InteractiveConsole:
                 self._session,
                 script_path,
                 inter_command_delay=delay,
+                condition_timeout=condition_timeout,
             )
-        except (OSError, SerialSessionError) as exc:
+        except (OSError, SerialSessionError, ValueError, ScriptSyntaxError) as exc:
             self.display_message(str(exc))
             return
 
         self.display_message(
-            f"Sent {len(commands)} commands from {script_path} with delay={delay:.3f}s."
+            f"Sent {len(commands)} commands from {script_path} with delay={delay:.3f}s "
+            f"and condition_timeout={condition_timeout:.3f}s."
         )
