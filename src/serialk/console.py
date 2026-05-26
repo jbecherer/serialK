@@ -7,10 +7,12 @@ from pathlib import Path
 import shlex
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
-from serialk.script_runner import ScriptSyntaxError, run_script
+from serialk.script_queue import ScriptJob, ScriptQueue
+from serialk.script_runner import ScriptCancelledError, ScriptSyntaxError, run_script
 from serialk.serial_session import SerialSession, SerialSessionError
 
 
@@ -24,6 +26,7 @@ class InteractiveConsole:
         history_path: Path,
         default_script_delay: float = 0.0,
         default_condition_timeout: float = 5.0,
+        script_queue: ScriptQueue | None = None,
     ) -> None:
         """Create a new terminal console.
 
@@ -37,20 +40,30 @@ class InteractiveConsole:
             Default delay in seconds used by the ``/run`` command.
         default_condition_timeout:
             Default conditional wait timeout in seconds used by ``/run``.
+        script_queue:
+            Script queue instance.  A new one is created if not provided.
         """
 
         history_path.parent.mkdir(parents=True, exist_ok=True)
         self._session = session
         self._default_script_delay = default_script_delay
         self._default_condition_timeout = default_condition_timeout
+        self._queue = script_queue if script_queue is not None else ScriptQueue()
         self._prompt = PromptSession(
             history=FileHistory(str(history_path)),
+            bottom_toolbar=self._build_toolbar,
         )
         self._running = True
 
-    async def run(self) -> None:
-        """Start the interactive prompt loop."""
+    def _build_toolbar(self) -> HTML:
+        """Return live queue status as HTML-formatted toolbar text."""
 
+        return HTML(f"<b> {self._queue.status_text()} </b>")
+
+    async def run(self) -> None:
+        """Start the interactive prompt loop and the queue worker."""
+
+        worker = asyncio.create_task(self._queue_worker(), name="queue-worker")
         self.display_message(
             "Connected. Type device commands directly or use /help for console commands."
         )
@@ -59,7 +72,8 @@ class InteractiveConsole:
                 try:
                     user_input = await self._prompt.prompt_async("serialk> ")
                 except KeyboardInterrupt:
-                    self.display_message("Press Ctrl-D or use /quit to exit.")
+                    self._queue.cancel_current_only()
+                    self.display_message("Script cancelled. Press Ctrl-D or /quit to exit.")
                     continue
                 except EOFError:
                     break
@@ -77,7 +91,37 @@ class InteractiveConsole:
                 except SerialSessionError as exc:
                     self.display_message(str(exc))
 
+        worker.cancel()
+        try:
+            await worker
+        except asyncio.CancelledError:
+            pass
         self.display_message("Closing console.")
+
+    async def _queue_worker(self) -> None:
+        """Drain the script queue, running one job at a time."""
+
+        while True:
+            job = await self._queue.next_job()
+            self.display_message(f"Starting script: {job.name}")
+            try:
+                sent_commands = await asyncio.to_thread(
+                    run_script,
+                    self._session,
+                    job.path,
+                    inter_command_delay=job.delay,
+                    condition_timeout=job.condition_timeout,
+                    cancel_event=self._queue.cancel_event,
+                )
+                self.display_message(
+                    f"Finished {job.name}: sent {len(sent_commands)} command(s)."
+                )
+            except ScriptCancelledError:
+                self.display_message(f"Cancelled: {job.name}")
+            except (OSError, SerialSessionError, ValueError, ScriptSyntaxError) as exc:
+                self.display_message(f"Script error ({job.name}): {exc}")
+            finally:
+                self._queue.finish_job()
 
     def display_device_line(self, line: str) -> None:
         """Display one received device line without timestamps."""
@@ -119,6 +163,9 @@ class InteractiveConsole:
         if command == "run":
             await self._run_script_command(parts)
             return
+        if command == "cancel":
+            await self._cancel_command()
+            return
 
         self.display_message(f"Unknown slash command: {raw_command}")
 
@@ -126,8 +173,9 @@ class InteractiveConsole:
         """Display supported slash commands."""
 
         self.display_message(
-            "Slash commands: /help, /status, /run <script> [delay_seconds] "
-            "[condition_timeout_seconds], /reconnect, /quit"
+            "Slash commands: /help, /status, "
+            "/run <script> [delay_seconds] [condition_timeout_seconds], "
+            "/cancel, /reconnect, /quit"
         )
 
     def _show_status(self) -> None:
@@ -149,7 +197,7 @@ class InteractiveConsole:
         )
 
     async def _run_script_command(self, parts: list[str]) -> None:
-        """Execute one script from the prompt loop."""
+        """Enqueue one script from the prompt loop."""
 
         if len(parts) < 2:
             self.display_message(
@@ -177,19 +225,13 @@ class InteractiveConsole:
                 )
                 return
 
-        try:
-            commands = await asyncio.to_thread(
-                run_script,
-                self._session,
-                script_path,
-                inter_command_delay=delay,
-                condition_timeout=condition_timeout,
-            )
-        except (OSError, SerialSessionError, ValueError, ScriptSyntaxError) as exc:
-            self.display_message(str(exc))
-            return
+        job = ScriptJob(path=script_path, delay=delay, condition_timeout=condition_timeout)
+        await self._queue.enqueue(job)
+        self.display_message(f"Queued: {script_path}")
 
-        self.display_message(
-            f"Sent {len(commands)} commands from {script_path} with delay={delay:.3f}s "
-            f"and condition_timeout={condition_timeout:.3f}s."
-        )
+    async def _cancel_command(self) -> None:
+        """Cancel the active script and clear the full queue."""
+
+        await self._queue.clear_queue()
+        self.display_message("Cancelled active script and cleared queue.")
+
