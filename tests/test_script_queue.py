@@ -223,3 +223,76 @@ def test_run_script_stops_mid_run_on_cancel(tmp_path: Path) -> None:
         run_script(session, script_path, cancel_event=event)  # type: ignore[arg-type]
 
     assert session.commands == ["ping"]
+
+
+# ---------------------------------------------------------------------------
+# prepend_job / cancel_by_name
+# ---------------------------------------------------------------------------
+
+
+def test_prepend_job_inserts_at_front() -> None:
+    """prepend_job makes the new job run before already-pending jobs."""
+
+    queue = ScriptQueue()
+    queue.enqueue_nowait(_make_job("first.txt"))
+    queue.enqueue_nowait(_make_job("second.txt"))
+
+    async def _run() -> None:
+        queue.set_loop(asyncio.get_running_loop())
+        await queue.prepend_job(_make_job("priority.txt"))
+        job = await queue.next_job()
+        assert job.name == "priority.txt"
+        queue.finish_job()
+
+    asyncio.run(_run())
+
+
+def test_cancel_by_name_removes_all_pending_matches() -> None:
+    """cancel_by_name removes every pending job with the matching filename."""
+
+    queue = ScriptQueue()
+    queue.enqueue_nowait(_make_job("target.txt"))
+    queue.enqueue_nowait(_make_job("keep.txt"))
+    queue.enqueue_nowait(_make_job("target.txt"))
+
+    async def _run() -> None:
+        queue.set_loop(asyncio.get_running_loop())
+        count = await queue.cancel_by_name("target.txt")
+        assert count == 2
+        assert all(j.name == "keep.txt" for j in queue._pending)
+
+    asyncio.run(_run())
+
+
+def test_cancel_by_name_also_cancels_running_job_if_name_matches() -> None:
+    """cancel_by_name sets cancel_event when the active job matches."""
+
+    queue = ScriptQueue()
+    queue.enqueue_nowait(_make_job("active.txt"))
+
+    async def _run() -> None:
+        queue.set_loop(asyncio.get_running_loop())
+        await queue.next_job()
+        count = await queue.cancel_by_name("active.txt")
+        assert count == 1
+        assert queue.cancel_event.is_set()
+        queue.finish_job()
+
+    asyncio.run(_run())
+
+
+def test_cancel_by_name_leaves_non_matching_jobs() -> None:
+    """cancel_by_name leaves pending jobs with different names intact."""
+
+    queue = ScriptQueue()
+    queue.enqueue_nowait(_make_job("a.txt"))
+    queue.enqueue_nowait(_make_job("b.txt"))
+
+    async def _run() -> None:
+        queue.set_loop(asyncio.get_running_loop())
+        count = await queue.cancel_by_name("a.txt")
+        assert count == 1
+        assert len(queue._pending) == 1
+        assert queue._pending[0].name == "b.txt"
+
+    asyncio.run(_run())

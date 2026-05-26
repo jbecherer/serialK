@@ -203,6 +203,41 @@ Conditional behavior notes:
 - if no matching line arrives before timeout, the `else` branch runs if present
 - nested conditionals are supported
 
+### In-script queue directives
+
+Scripts can control the queue directly using `/queue` and `/cancel` directives.
+
+**`/queue <path> [delay] [condition_timeout]`** — enqueue another script as the *next* job
+(jumps ahead of anything already pending). Relative paths are resolved relative to the
+currently executing script file.
+
+```text
+# run calibration immediately after this script finishes
+/queue scripts/calibrate.txt
+
+# override delay and condition timeout for the queued job
+/queue scripts/measure.txt 0.5 10.0
+```
+
+**`/cancel`** — cancel every pending script **and** raise `ScriptCancelledError` to stop
+the current script.
+
+**`/cancel current`** — stop only the current script; leave the queue untouched.
+
+**`/cancel <name>`** — remove all pending jobs whose filename matches `<name>`, and stop
+the current script if its filename also matches.
+
+```text
+# stop this script and clear everything
+/cancel
+
+# stop only this script; next queued job continues
+/cancel current
+
+# drop any pending 'old_calibrate.txt' jobs from the queue
+/cancel old_calibrate.txt
+```
+
 ## Output data and logging
 
 Each session creates one log file in the resolved log directory:
