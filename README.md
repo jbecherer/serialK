@@ -121,7 +121,7 @@ uv run serialk --profile instrument_shell --log-dir /mnt/lab/logs
 Run a startup script before entering the console:
 
 ```bash
-uv run serialk --profile instrument_shell --script scripts/startup.txt --script-delay 0.5
+uv run serialk --profile instrument_shell --script scripts/startup.txt --script-delay 0.5 --script-condition-timeout 5.0
 ```
 
 Run against the built-in simulator:
@@ -138,7 +138,7 @@ Built-in console commands:
 
 - `/help`
 - `/status`
-- `/run <script_path> [delay_seconds]`
+- `/run <script_path> [delay_seconds] [condition_timeout_seconds]`
 - `/reconnect`
 - `/quit`
 
@@ -154,6 +154,10 @@ Scripts are plain UTF-8 text files with one command per line.
 - delays are defined per script run, not per line inside the script file
 - use `--script-delay <seconds>` for startup scripts or `/run <script_path> [delay_seconds]` in the interactive console to apply one fixed delay between all sent commands
 - line-specific delays are not supported in v1
+- conditional blocks are supported with `if` / `else` / `endif`
+- conditional matching waits on future incoming RX lines and uses case-sensitive substring matching
+- use `--script-condition-timeout <seconds>` or `/run <script_path> [delay_seconds] [condition_timeout_seconds]` to set the default timeout for conditional blocks
+- one conditional block can override the default timeout with `timeout=<seconds>`
 
 Example:
 
@@ -163,6 +167,31 @@ ping
 status
 start
 ```
+
+Conditional example:
+
+```text
+if "READY"
+    start
+else
+    status
+endif
+
+if "MODE=IDLE" timeout=2.0
+    ping
+    if "MEAS index="
+        status
+    else
+        stop
+    endif
+endif
+```
+
+Conditional behavior notes:
+
+- the `if` match only considers lines received after that `if` starts waiting
+- if no matching line arrives before timeout, the `else` branch runs if present
+- nested conditionals are supported
 
 ## Output data and logging
 

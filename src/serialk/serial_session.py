@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import threading
 from typing import Callable, Protocol
@@ -48,6 +48,15 @@ class SessionStatus:
     last_error: str | None
 
 
+@dataclass(slots=True)
+class _LineWaiter:
+    """Thread-safe wait registration for one awaited substring."""
+
+    substring: str
+    event: threading.Event = field(default_factory=threading.Event)
+    matched_line: str | None = None
+
+
 class SerialSession:
     """Manage one text-based serial connection and its reader thread."""
 
@@ -81,6 +90,8 @@ class SerialSession:
         self._reader_thread: threading.Thread | None = None
         self._reader_stop_event = threading.Event()
         self._state_lock = threading.Lock()
+        self._waiter_lock = threading.Lock()
+        self._waiters: list[_LineWaiter] = []
         self._commands_sent = 0
         self._messages_received = 0
         self._last_error: str | None = None
@@ -196,6 +207,53 @@ class SerialSession:
                 last_error=self._last_error,
             )
 
+    def wait_for_substring(self, substring: str, timeout: float) -> str | None:
+        """Wait for a future RX line containing the given substring.
+
+        Parameters
+        ----------
+        substring:
+            Case-sensitive substring to match in future received lines.
+        timeout:
+            Maximum wait time in seconds.
+
+        Returns
+        -------
+        str | None
+            The first matching line, or ``None`` if the timeout expires.
+
+        Raises
+        ------
+        SerialSessionError
+            If the session is disconnected or the arguments are invalid.
+        """
+
+        if not substring:
+            raise SerialSessionError("Cannot wait for an empty substring.")
+        if timeout < 0:
+            raise SerialSessionError("Wait timeout must be non-negative.")
+        if not self.is_connected:
+            raise SerialSessionError("Serial session is not connected.")
+
+        waiter = _LineWaiter(substring=substring)
+        self.logger.log_event(f"WAIT substring={substring!r} timeout={timeout:.3f}")
+        with self._waiter_lock:
+            self._waiters.append(waiter)
+
+        matched = waiter.event.wait(timeout)
+        with self._waiter_lock:
+            if waiter in self._waiters:
+                self._waiters.remove(waiter)
+
+        if matched and waiter.matched_line is not None:
+            self.logger.log_event(
+                f"MATCH substring={substring!r} line={waiter.matched_line!r}"
+            )
+            return waiter.matched_line
+
+        self.logger.log_event(f"TIMEOUT substring={substring!r} timeout={timeout:.3f}")
+        return None
+
     def close(self) -> None:
         """Close the session and its logger."""
 
@@ -223,6 +281,7 @@ class SerialSession:
             with self._state_lock:
                 self._messages_received += 1
             self.logger.log_rx(line)
+            self._notify_waiters(line)
             self._display_callback(line)
 
     def _record_async_error(self, message: str) -> None:
@@ -232,6 +291,15 @@ class SerialSession:
             self._last_error = message
         self.logger.log_event(message)
         self._display_callback(f"[error] {message}")
+
+    def _notify_waiters(self, line: str) -> None:
+        """Wake registered waiters whose substring matches the received line."""
+
+        with self._waiter_lock:
+            for waiter in self._waiters:
+                if waiter.matched_line is None and waiter.substring in line:
+                    waiter.matched_line = line
+                    waiter.event.set()
 
 
 def open_transport(profile: InstrumentProfile) -> LineTransport:
