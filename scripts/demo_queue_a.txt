@@ -1,0 +1,50 @@
+# demo_queue_a.txt
+#
+# First script in a two-script queue demo.
+# Demonstrates: queueing, Ctrl-C cancellation, /cancel, and the /queue directive.
+#
+# How to run
+# ----------
+# 1. Start the simulator:
+#    uv run serialk --profile instrument_simulator
+#
+# 2. Enqueue this script from the console prompt:
+#    /run scripts/demo_queue_a.txt 0.4
+#
+#    The toolbar shows: scripts: [running: demo_queue_a.txt]
+#    This script itself queues demo_queue_b.txt via the /queue directive.
+#
+# 3. To test Ctrl-C cancellation: press Ctrl-C while this script is running.
+#    Only this script stops; demo_queue_b.txt starts automatically.
+#
+# 4. To test /cancel: type /cancel while this script is running.
+#    Both scripts are cleared from the queue instantly.
+#
+# Script A: start measurements, sample a few readings, then queue Script B
+# ─────────────────────────────────────────────────────────────────────────
+
+ping
+
+# Make sure measurements are running before we start sampling
+if "PONG" timeout=2.0
+    stop
+else
+    ping
+endif
+
+# Wait for the first measurement line to confirm the stream is live,
+# then take a status snapshot.
+if "MEAS index=" timeout=3.0
+    status
+else
+    # stream didn't start in time → stop cleanly
+    stop
+endif
+
+# Queue script B as the next job (runs immediately after this one finishes)
+/queue scripts/demo_queue_b.txt
+
+# A few more pings to give you time to observe the toolbar
+ping
+ping
+ping
