@@ -12,7 +12,12 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from serialk.script_queue import ScriptJob, ScriptQueue
-from serialk.script_runner import ScriptCancelledError, ScriptSyntaxError, run_script
+from serialk.script_runner import (
+    QueueControl,
+    ScriptCancelledError,
+    ScriptSyntaxError,
+    run_script,
+)
 from serialk.serial_session import SerialSession, SerialSessionError
 
 
@@ -63,6 +68,7 @@ class InteractiveConsole:
     async def run(self) -> None:
         """Start the interactive prompt loop and the queue worker."""
 
+        self._queue.set_loop(asyncio.get_running_loop())
         worker = asyncio.create_task(self._queue_worker(), name="queue-worker")
         self.display_message(
             "Connected. Type device commands directly or use /help for console commands."
@@ -101,6 +107,16 @@ class InteractiveConsole:
     async def _queue_worker(self) -> None:
         """Drain the script queue, running one job at a time."""
 
+        loop = asyncio.get_running_loop()
+        queue_control = QueueControl(
+            prepend_job=lambda path, delay, cond_to: self._queue.prepend_job_from_thread(
+                ScriptJob(path=path, delay=delay, condition_timeout=cond_to)
+            ),
+            cancel_all=self._queue.clear_queue_from_thread,
+            cancel_current=self._queue.cancel_current_only,
+            cancel_by_name=self._queue.cancel_by_name_from_thread,
+        )
+
         while True:
             job = await self._queue.next_job()
             self.display_message(f"Starting script: {job.name}")
@@ -112,6 +128,7 @@ class InteractiveConsole:
                     inter_command_delay=job.delay,
                     condition_timeout=job.condition_timeout,
                     cancel_event=self._queue.cancel_event,
+                    queue_control=queue_control,
                 )
                 self.display_message(
                     f"Finished {job.name}: sent {len(sent_commands)} command(s)."
