@@ -19,7 +19,8 @@ from serialk.config import (
 )
 from serialk.console import InteractiveConsole
 from serialk.logging import SessionLogger
-from serialk.script_runner import ScriptSyntaxError, run_script
+from serialk.script_queue import ScriptJob, ScriptQueue
+from serialk.script_runner import ScriptCancelledError, ScriptSyntaxError, run_script
 from serialk.serial_session import SerialSession, SerialSessionError
 
 
@@ -63,28 +64,28 @@ def main() -> None:
 
     logger = SessionLogger(profile.name, log_dir)
     session = SerialSession(profile, logger)
+    script_queue = ScriptQueue()
     console = InteractiveConsole(
         session,
         history_path=history_path,
         default_script_delay=args.script_delay,
         default_condition_timeout=args.script_condition_timeout,
+        script_queue=script_queue,
     )
     session.set_display_callback(console.display_device_line)
 
     try:
         session.connect()
         if args.script is not None:
-            sent_commands = run_script(
-                session,
-                args.script,
-                inter_command_delay=args.script_delay,
-                condition_timeout=args.script_condition_timeout,
-            )
-            console.display_message(
-                f"Sent {len(sent_commands)} startup commands from {args.script}."
+            script_queue.enqueue_nowait(
+                ScriptJob(
+                    path=args.script,
+                    delay=args.script_delay,
+                    condition_timeout=args.script_condition_timeout,
+                )
             )
         asyncio.run(console.run())
-    except (ConfigurationError, OSError, SerialSessionError, ValueError, ScriptSyntaxError) as exc:
+    except (ConfigurationError, OSError, SerialSessionError, ValueError, ScriptCancelledError, ScriptSyntaxError) as exc:
         logger.log_event(f"ERROR {exc}")
         _exit_with_error(str(exc))
     finally:

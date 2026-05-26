@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shlex
+import threading
 import time
 
 from serialk.serial_session import SerialSession
@@ -12,6 +13,10 @@ from serialk.serial_session import SerialSession
 
 class ScriptSyntaxError(ValueError):
     """Raised when a script file contains invalid conditional syntax."""
+
+
+class ScriptCancelledError(Exception):
+    """Raised when a script is cancelled via a cancel event."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +48,7 @@ class _ExecutionState:
     sent_commands: list[str]
     inter_command_delay: float
     default_condition_timeout: float
+    cancel_event: threading.Event | None
     has_sent_command: bool = False
 
 
@@ -119,6 +125,7 @@ def run_script(
     *,
     inter_command_delay: float = 0.0,
     condition_timeout: float = 5.0,
+    cancel_event: threading.Event | None = None,
 ) -> list[str]:
     """Send all commands from one script through the shared session pipeline.
 
@@ -133,11 +140,20 @@ def run_script(
     condition_timeout:
         Default timeout in seconds used by conditional waits that do not
         define their own ``timeout=...`` value.
+    cancel_event:
+        Optional threading event checked before each command and each
+        conditional wait.  When set, execution stops and
+        :class:`ScriptCancelledError` is raised.
 
     Returns
     -------
     list[str]
         Commands that were sent.
+
+    Raises
+    ------
+    ScriptCancelledError
+        If ``cancel_event`` is set before or during execution.
     """
 
     if inter_command_delay < 0:
@@ -150,6 +166,7 @@ def run_script(
         sent_commands=[],
         inter_command_delay=inter_command_delay,
         default_condition_timeout=condition_timeout,
+        cancel_event=cancel_event,
     )
     _execute_nodes(session, nodes, state)
     return state.sent_commands
@@ -295,6 +312,9 @@ def _execute_nodes(
     """Execute parsed script nodes recursively."""
 
     for node in nodes:
+        if state.cancel_event is not None and state.cancel_event.is_set():
+            raise ScriptCancelledError("Script cancelled.")
+
         if isinstance(node, CommandNode):
             _execute_command(session, node.command, state)
             continue
@@ -303,6 +323,10 @@ def _execute_nodes(
             state.default_condition_timeout if node.timeout is None else node.timeout
         )
         matched_line = session.wait_for_substring(node.substring, timeout)
+
+        if state.cancel_event is not None and state.cancel_event.is_set():
+            raise ScriptCancelledError("Script cancelled.")
+
         branch = node.then_branch if matched_line is not None else node.else_branch
         _execute_nodes(session, branch, state)
 
@@ -314,6 +338,8 @@ def _execute_command(
 ) -> None:
     """Send one command while preserving the global inter-command delay."""
 
+    if state.cancel_event is not None and state.cancel_event.is_set():
+        raise ScriptCancelledError("Script cancelled.")
     if state.has_sent_command and state.inter_command_delay > 0:
         time.sleep(state.inter_command_delay)
     session.send_command(command)

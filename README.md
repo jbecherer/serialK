@@ -138,9 +138,19 @@ Built-in console commands:
 
 - `/help`
 - `/status`
-- `/run <script_path> [delay_seconds] [condition_timeout_seconds]`
+- `/run <script_path> [delay_seconds] [condition_timeout_seconds]` — enqueue a script; runs immediately if idle, otherwise queues behind the active script
+- `/cancel` — cancel the active script and clear all pending scripts from the queue
 - `/reconnect`
 - `/quit`
+
+A persistent **bottom toolbar** shows the current queue state at all times:
+
+```
+scripts: [running: startup.txt] [queued: calibrate.txt, measure.txt]
+scripts: idle
+```
+
+**Ctrl-C** cancels only the currently running script. The next queued script starts automatically. `/cancel` cancels the active script **and** empties the entire queue.
 
 Incoming device lines are shown live in the terminal without timestamps. Timestamps are preserved in the session log file instead.
 
