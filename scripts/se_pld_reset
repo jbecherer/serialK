@@ -1,0 +1,4 @@
+$pld.all.reset
+# pld.[sensor].reset set the sensor back to the defaults defined in the payload config
+
+?pld.all.config

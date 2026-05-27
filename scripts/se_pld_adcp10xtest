@@ -1,0 +1,33 @@
+?pld.AD2CP.config
+
+# dive 1,6,11,16...
+$pld.AD2CP.acq.1.depth=220
+$pld.AD2CP.acq.1.period=0
+$pld.AD2CP.acq.1.phase=111
+$pld.AD2CP.acq.1.yo=5
+
+# dive 5,9,13,17...
+$pld.AD2CP.acq.2.depth=220
+$pld.AD2CP.acq.2.period=0
+$pld.AD2CP.acq.2.phase=100
+$pld.AD2CP.acq.2.yo=4
+
+# dive 4,7,10,  , ,19,...
+$pld.AD2CP.acq.3.depth=220
+$pld.AD2CP.acq.3.period=0
+$pld.AD2CP.acq.3.phase=010
+$pld.AD2CP.acq.3.yo=3
+
+# dive 3,15,...
+$pld.AD2CP.acq.4.depth=220
+$pld.AD2CP.acq.4.period=0
+$pld.AD2CP.acq.4.phase=001
+$pld.AD2CP.acq.4.yo=2
+
+# dive 2,8,12,14,18
+$pld.AD2CP.acq.5.depth=220
+$pld.AD2CP.acq.5.period=0
+$pld.AD2CP.acq.5.phase=101
+$pld.AD2CP.acq.5.yo=1
+
+?pld.AD2CP.config

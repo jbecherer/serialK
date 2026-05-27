@@ -13,7 +13,7 @@ wheels/
 logs/
 
 # ignore script files
-scripts/
+#scripts/
 
 # ignore link to local config file
 config.toml

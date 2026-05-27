@@ -1,0 +1,38 @@
+# demo_queue_b.txt
+#
+# Second script in the two-script queue demo.
+# Runs automatically after demo_queue_a.txt finishes (or after Ctrl-C skips A).
+#
+# Script B: stop measurements, verify, then restart cleanly
+# ──────────────────────────────────────────────────────────
+
+# Stop the measurement stream
+stop
+
+if "MEASUREMENT STOPPED" timeout=2.0
+    # Confirmed stopped → check the counter via status
+    status
+
+    if "mode=IDLE" timeout=2.0
+        # Instrument is now idle → restart measurements for the next session
+        start
+    else
+        # status reply didn't confirm IDLE; try once more
+        status
+    endif
+
+else
+    # stop response wasn't seen (e.g. script A was cancelled before start ran)
+    # Query current state and restart from whatever mode we're in
+    status
+    start
+endif
+
+# Final health-check
+ping
+
+if "PONG" timeout=2.0
+    status
+else
+    ping
+endif

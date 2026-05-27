@@ -1,0 +1,65 @@
+# demo_conditionals.txt
+#
+# Demonstrates conditional (if/else/endif) script execution against the
+# built-in simulator.  Run with:
+#
+#   uv run serialk --profile instrument_simulator
+#   /run scripts/demo_conditionals.txt 0.3
+#
+# Or as a startup script:
+#   uv run serialk --profile instrument_simulator --script scripts/demo_conditionals.txt --script-delay 0.3
+#
+# What to watch for
+# -----------------
+# 1. The outer "if PONG" block: sends ping, waits for PONG → then-branch runs
+#    (status + inner block), never the else-branch (stop).
+#
+# 2. The nested "if MEASUREMENT" block: status returns "STATUS mode=MEASUREMENT"
+#    while the simulator is running → then-branch runs (start), not else (shell).
+#
+# 3. The "if DOES_NOT_EXIST" block: uses a short timeout=0.5 so you can see
+#    the console pause briefly, then fall through to the else-branch (ping again).
+#
+# 4. The final "if MEASUREMENT STOPPED" block: stop disables measurements and
+#    replies "MEASUREMENT STOPPED" → then-branch confirms with status, else would
+#    start it back up.
+
+# ── Step 1: confirm simulator is alive ───────────────────────────────────────
+ping
+
+if "PONG" timeout=2.0
+    # simulator replied PONG → check measurement state
+    status
+
+    if "mode=MEASUREMENT"
+        # measurements are running → send start just to confirm the command path
+        start
+    else
+        # measurements were off → turn them on
+        shell
+    endif
+
+else
+    # no PONG arrived — connection issue
+    stop
+endif
+
+# ── Step 2: demonstrate timeout + else fallback ───────────────────────────────
+# This substring will never appear; timeout=0.5 keeps the wait short.
+# The else-branch runs as a fallback.
+if "DOES_NOT_EXIST" timeout=0.5
+    stop
+else
+    ping
+endif
+
+# ── Step 3: stop measurements and confirm with another conditional ────────────
+stop
+
+if "MEASUREMENT STOPPED" timeout=2.0
+    # confirmed stopped → query final status
+    status
+else
+    # stop response missed; nudge with ping
+    ping
+endif

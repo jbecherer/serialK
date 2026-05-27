@@ -1,0 +1,10 @@
+if "Waiting for RESUME" timeout=30.
+	$halt=0
+endif
+if "Waiting for GO" timeout=20.
+	$go
+endif
+
+if "GO received" timeout=20.
+	GLider send to dive!!!!
+endif

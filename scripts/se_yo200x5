@@ -1,0 +1,32 @@
+# halt
+$halt=1
+
+# bladder volume -1020 (20 cm/s) or -200 for (200ml) downcast
+$bd=-200
+
+# bladder volume 1020 (20 cm/s) or 200 for (200ml) downcast
+$bu=200
+
+# linear position during dives (10 [mm]) or (-1020 [- 20deg pitch])
+$pd=8
+# linear position during climbs (-10 [mm]) or (1020 [deg])
+$pu=-8
+
+# bottom turn around and drift position
+$zb=200
+
+# top inflection for surfacing
+$zs=2 
+
+# multi dive inflection (should be larger than $zs)
+$zt=5
+
+# number of yos 
+$sr=5
+
+# altimeter height above the bottom trigger turn around in [m]
+$alt=30
+
+# turn off altimeter
+# $altimeter.enable=0
+

@@ -1,0 +1,53 @@
+$drf.enable=1
+
+#----- basics -----
+
+# target depth of the drift
+$zb=50
+
+# timeout [min] length of the drift
+$drf.timeout=30
+
+# bladder volume in [ml] relative to neutral position during the drift. [-500:500]
+$drf.ballast=0
+
+# linear position relative linear.base [-20:20] , pitch controla [1000:1045(deg);-1045:-1000] command or depth control enable [-9999] (default). 
+$drf.linear=0
+
+# angular position in deg relative to neutral position [-70:70] during the drift. +1000 for the roll control activation [default]
+$drf.angular=0
+
+
+# ----- margins -------
+
+# ballast regulation deadzone [m]. Outside the deadzone, the ballast will regulate to get to target depth. 
+$drf.dpid.deadzone = 30
+
+# Set drifting error margin [m] around drifting depth. Outside the margin, the vehicle goes up to the surface with the alarm code 2048.
+$drf.error=50
+
+
+
+# ----- find balance -------
+#	Activate/deactivate [1,0] the findBalance to:
+#	- Adjust automatically the depth control
+#	- Find the ballast equilibrium for given depth
+$drf.findBalance=0
+
+
+#------ propeller ------
+
+# speed [%] used in propelled drifts  (default=0)
+#$drf.speed=50
+
+# Enable init control of pitch to 0° before starting a propelled drift
+#$drf.init.control=1
+
+# Init control is maintained while the glider is out of the error [0.0:20.0] deg.
+#$drf.init.error=1.0
+
+# Minimum time [s] pitch has to stay within the error for the init control to stop.
+#$drf.init.threshold=10
+
+# Maximum time [s] init control will stay activated
+#$drf.init.timeout=90

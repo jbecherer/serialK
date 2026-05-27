@@ -1,0 +1,12 @@
+# Set heading to follow [0:360] deg.
+# +/-1000 to control directly the angular position [-1045:-1000; 1000:1045].
+# -9999 us default (switch of??)
+$heading=0 
+
+See below for more explanations.
+
+# Set heading regulation deadzone [deg] (default=1). Outside the deadzone, the angular will regulate to compensate and follow the commanded heading.
+$heading.deadzone=5
+
+$heading.pid.lowNoise.enable=0
+# To activate or deactivate the low noise function. In heading control mode, the glider is too reactive around the set point. It is sometimes usefull to set the angular actuator less often.
