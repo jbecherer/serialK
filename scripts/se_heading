@@ -1,3 +1,6 @@
+# switch off waypoint navigation 
+$wpt.enable=0
+
 # Set heading to follow [0:360] deg.
 # +/-1000 to control directly the angular position [-1045:-1000; 1000:1045].
 # -9999 us default (switch of??)
