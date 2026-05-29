@@ -1,8 +1,9 @@
 $wpt.enable=1
 
 # $wpt.set=1,<LAT>,<LON>,<RVAL>;
-# - <LAT> and <LON> are the GPS coordinates (decimal degrees format) of the current step.
+# - <LAT> and <LON> are the GPS coordinates (DDMM.MMMMM) of the current step.
 # - <RVAL> is the validation radius in kilometer
-$wpt.set=1,19.0,-65.0,10;
+$wpt.set=1,1900.0,-6500.0,10;
 
-$wpt.set=2,19.5,-65.0,10;
+# not sure if it takes a 2nd waypoint
+#$wpt.set=2,1930.0,-6500.0,10;
