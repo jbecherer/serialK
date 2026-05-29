@@ -6,7 +6,7 @@ $drf.enable=1
 $zb=50
 
 # timeout [min] length of the drift
-$drf.timeout=30
+$drf.timeout=10
 
 # bladder volume in [ml] relative to neutral position during the drift. [-500:500]
 $drf.ballast=0
